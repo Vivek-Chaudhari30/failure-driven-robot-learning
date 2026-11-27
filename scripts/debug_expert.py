@@ -62,9 +62,11 @@ def main() -> int:
                   f"({a[0]:+.2f},{a[1]:+.2f},{a[2]:+.2f},{a[5]:+.2f},{a[6]:+.0f})")
         priv = be.step(act)
     print("\nper-env summary:")
+    yaw_end = np.degrees(wrap_sym90(yaw_from_quat_xyzw(priv["cube_quat"]) - yaw_from_quat_xyzw(priv["ee_quat"])))
+    dxy_end = np.linalg.norm(priv["cube_pos"][:, :2] - priv["ee_pos"][:, :2], axis=1)
     for i in range(n):
         print(f"env {i}: θ={conds[i]}  max_min_finger_force={max_f[i]:.2f}N  max_cube_height={max_h[i]:.4f}m  "
-              f"phases={sorted(phases_seen[i])}")
+              f"final_dxy={dxy_end[i]:.4f} final_yaw_err={yaw_end[i]:+.1f}deg  phases={sorted(phases_seen[i])}")
     be.close()
     return 0
 

@@ -72,6 +72,12 @@ class IsaacCfg:
     headless: bool = True
     quat_order: str = "xyzw"  # Isaac Lab 3.0 uses XYZW; <=2.3 used WXYZ
     friction_body: str = "object"  # scene entity whose material friction is set to mu
+    # Isaac's relative IK re-anchors each command at the CURRENT (lagging) hand pose, so only a
+    # fraction of each Δ is realised. The adapter therefore integrates actions into a target pose
+    # and commands (target - current). The target may lead the hand by at most these amounts.
+    track_target: bool = True
+    max_lead_m: float = 0.05
+    max_lead_rad: float = 0.3
 
 
 @dataclass

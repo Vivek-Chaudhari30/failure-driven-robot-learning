@@ -18,7 +18,11 @@ import numpy as np
 
 from fdrl.conditions import Condition
 from fdrl.config import IsaacCfg, TaskCfg
-from fdrl.sim.obs import quat_xyzw_from_yaw
+from fdrl.sim.obs import quat_xyzw_from_yaw, yaw_from_quat_xyzw
+
+
+def _wrap_pi(a: np.ndarray) -> np.ndarray:
+    return (np.asarray(a) + np.pi) % (2 * np.pi) - np.pi
 
 
 def _to_numpy(x) -> np.ndarray:
@@ -171,20 +175,42 @@ class IsaacLabLiftBackend:
         self.mu_readback = back[:, 0, 0].detach().cpu().numpy().astype(np.float64)
         # One zero-motion step so the new state is reflected in the buffers.
         self._last_ee = None
+        self._target = None
+        self._last_priv = None
         priv = self.step(np.concatenate([np.zeros((n, 6)), np.ones((n, 1))], axis=1).astype(np.float32))
         self._z0 = priv["cube_pos"][:, 2].copy()
         priv["cube_z0"] = self._z0.copy()
+        # Anchor the target pose at the settled hand pose.
+        self._target = priv["ee_pos"].copy()
+        self._target_yaw = yaw_from_quat_xyzw(priv["ee_quat"]).copy()
+        self._last_priv = priv
         return priv
 
     def step(self, actions: np.ndarray) -> dict[str, np.ndarray]:
         torch = self.torch
-        a = np.clip(np.asarray(actions, dtype=np.float32), -1.0, 1.0)
+        a = np.clip(np.asarray(actions, dtype=np.float64), -1.0, 1.0)
         raw = np.zeros_like(a)
-        raw[:, :3] = a[:, :3] * self.task.pos_scale / self._ik_scale
-        raw[:, 3:6] = a[:, 3:6] * self.task.rot_scale / self._ik_scale
+        cfg = self.cfg
+        if cfg.track_target and self._target is not None and self._last_priv is not None:
+            # Integrate the action into a target pose, then command the gap to the current pose.
+            cur = self._last_priv["ee_pos"]
+            self._target = self._target + a[:, :3] * self.task.pos_scale
+            self._target = np.clip(self._target, cur - cfg.max_lead_m, cur + cfg.max_lead_m)
+            raw[:, :3] = (self._target - cur) / self._ik_scale
+            cur_yaw = yaw_from_quat_xyzw(self._last_priv["ee_quat"])
+            self._target_yaw = self._target_yaw + a[:, 5] * self.task.rot_scale
+            lead = np.clip(_wrap_pi(self._target_yaw - cur_yaw), -cfg.max_lead_rad, cfg.max_lead_rad)
+            self._target_yaw = cur_yaw + lead
+            raw[:, 3:5] = a[:, 3:5] * self.task.rot_scale / self._ik_scale
+            raw[:, 5] = lead / self._ik_scale
+        else:
+            raw[:, :3] = a[:, :3] * self.task.pos_scale / self._ik_scale
+            raw[:, 3:6] = a[:, 3:6] * self.task.rot_scale / self._ik_scale
         raw[:, 6] = np.where(a[:, 6] < 0, -1.0, 1.0)  # binary gripper: negative closes  # VERIFY
-        self.env.step(torch.tensor(raw, device=self.device))
-        return self._priv()
+        self.env.step(torch.tensor(raw, dtype=torch.float32, device=self.device))
+        priv = self._priv()
+        self._last_priv = priv
+        return priv
 
     # ------------------------------------------------------------------------------------
     def _priv(self) -> dict[str, np.ndarray]:
