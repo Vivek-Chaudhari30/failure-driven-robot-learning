@@ -1,0 +1,16 @@
+# Strategy tunables (EXPERIMENT_DESIGN 7.1). Tune only on calibration/validation seeds,
+# with the same tuning budget (<= 8 configurations) for S3, S4 and S5.
+strategy:
+  floor: 0.10
+  beta: 0.5
+  fixability_priors:
+    coverage: 1.0
+    compounding: 0.6
+    capacity: 0.6
+    observability: 0.3
+    expert_infeasible: 0.0
+    healthy: 0.2
+diagnosis:
+  infeasible_expert_success: 0.8
+  healthy_success: 0.9
+  run_privileged_probe: false

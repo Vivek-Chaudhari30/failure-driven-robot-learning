@@ -1,0 +1,17 @@
+# Laptop pilot on the toy backend (~10-20 min on CPU). Exercises the real protocol at small scale.
+# Numbers from the toy backend are NOT research results.
+experiment:
+  name: local_pilot
+  kind: equal_budget
+  regimes: [R2]
+  pipeline_seeds: [0, 1, 2]
+  strategies: [S2, S3, S3b, S5, S5-shuffled, S6]
+  n0: 100
+  budgets: [100]
+  demo_equiv_steps: 85
+policy:
+  ensemble_size: 3
+train:
+  steps: 4000
+eval:
+  n_per_cell_val: 20

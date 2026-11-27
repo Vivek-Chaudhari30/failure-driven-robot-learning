@@ -1,0 +1,14 @@
+# EXPERIMENT_DESIGN section 9: fixed protocol for every strategy.
+policy:
+  hidden: 512
+  layers: 3
+  ensemble_size: 5
+train:
+  steps: 50000
+  batch_size: 256
+  lr: 3.0e-4
+  weight_decay: 1.0e-4
+  device: cpu
+eval:
+  n_per_cell_val: 100
+  n_per_cell_test: 300

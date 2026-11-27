@@ -9,7 +9,7 @@
 | Machine | Status | Implication |
 |---------|--------|-------------|
 | Dev laptop | Inspected: Apple M5 Pro (arm64), macOS, 24 GB RAM, ~190 GB free, no NVIDIA GPU. Python 3.11 (python.org) and 3.12 (Anaconda), `uv` and `docker` available. | **Isaac Sim / Isaac Lab cannot run here** (no macOS support). Use the laptop for sim-free code (training, diagnosis, analysis, tests), docs, and a MuJoCo/robosuite learning sandbox. |
-| Professor's GPU cluster | **Not yet inspected** | Run `scripts/check_env.sh` (§2) before any install decision. |
+| Lab GPU workstations | **Inspected 2026-11-26** (kyoto): RTX A6000 / RTX 6000 Ada, driver 580.178.04, Ubuntu 24.04, Python 3.12, no SLURM, no containers | Isaac-class GPUs; driver below Isaac Lab 3.0's stated minimum (untested). Plain `uv` venv over ssh. See §6. |
 
 ## 1. Verified requirements (as of 2026-11-26)
 
@@ -112,10 +112,62 @@ Our own package (`src/fdrl`) is split so that **only `fdrl.sim` needs the simula
 | Cluster sim jobs | inside the Isaac Lab container: `pip install -e . --no-deps` + the few extra deps | Isaac Lab's Python 3.12 + torch; our package on top |
 | Mac learning sandbox (optional) | separate venv: `robosuite` (+ `mjpython` for the viewer) | For learning only, not for reported results |
 
-`pyproject.toml` is written in M1, *after* the decision table, so the pins match the real stack
-(Python 3.12 if Isaac Lab 3.x).
+`pyproject.toml` exists with lower-bound pins only. Tighten the pins in M1 to match what is
+actually installed on the GPU machines, and record them in §6.
 
 ## 6. Decision record
 
-*(To be filled in M1: cluster report summary, chosen path, pinned versions, measured
-throughput in episodes/min for 1,024 envs × 250 steps, and peak VRAM.)*
+### 6.1 What the lab machines are (inspected 2026-11-26, `scripts/check_env.sh` on `kyoto`)
+
+The lab GPUs are **shared Ubuntu workstations reached over ssh**, not a SLURM cluster.
+
+| Item | Finding | Consequence |
+|------|---------|-------------|
+| Machines | hokkaido, tokyo, umibozu, kyoto, saitama (2 GPUs), bippu, osaka, fukuyama, kawasaki, tottori | Pick a free one with `gpus` before every run |
+| GPUs | RTX A6000 48 GB (Ampere, RT cores); fukuyama/kawasaki RTX 6000 Ada 48 GB | RTX-class with RT cores: Isaac Sim-class GPUs. Not on NVIDIA's tested list, but not excluded either (only GPUs without RT cores are) |
+| Driver | **580.178.04** (CUDA 13.0) | **Below** Isaac Lab 3.0's stated 595.58.03 minimum for its default CUDA 13 stack. Untested whether it works anyway |
+| OS / Python | Ubuntu 24.04.4, system Python 3.12.3 | Matches Isaac Lab 3.0 (Python 3.12) |
+| Scheduler | none (no `sinfo`) | No `srun`; run in `tmux`, pin a GPU with `CUDA_VISIBLE_DEVICES` |
+| Containers | none (no docker / podman / apptainer) | §4 (Apptainer) does not apply; use a plain `uv` virtualenv |
+| CPU / RAM | 22 cores, 125 GB (kyoto) | Fine |
+| Disk | local `/` 1.8 TB, 90% full (187 GB free); NFS home on a 104 TB share | Put the virtualenv on local disk (Isaac Sim has thousands of small files, slow on NFS); keep `runs/` on NFS or local disk as space allows |
+| Network | pypi, pypi.nvidia.com, github reachable; nvcr.io needs login | pip installs work |
+| Health | kyoto GPU0 reports "Unknown Error" in `nvidia-smi`; only GPU1 usable | Report to admins. The `gpus` helper shows one line per machine and hides this |
+
+### 6.2 Chosen path
+
+**Try Isaac Lab 3.0 (pip/uv install, no container) on the current driver first.** If it fails
+because of the driver, either (a) ask the admins for a 595-series driver, or (b) fall back to
+Isaac Lab 2.3.2 + Isaac Sim 5.1, whose docs recommend driver ≥ 580.65.06 (met) but need
+Python 3.11 (installable with `uv` without root) and list Ubuntu 22.04. Isaac Sim 5.1 is no longer
+supported by NVIDIA. If both fail: ManiSkill3 (Path 3).
+
+Still to record here after M1: exact versions installed, measured throughput (episodes/min for
+1,024 envs × 250 steps), peak VRAM, and the `scripts/isaac_smoke.py` result.
+
+### 6.3 Running on the lab GPUs (procedure)
+
+```bash
+ssh kyoto                                  # pick a FREE machine with `gpus` first
+git clone <your private repo> ~/fdrl && cd ~/fdrl
+export UV_CACHE_DIR=/tmp/$USER/uv-cache     # keep caches off NFS
+uv venv --python 3.12 /tmp/$USER/fdrl-venv  # local disk; recreate if /tmp is cleaned
+source /tmp/$USER/fdrl-venv/bin/activate
+uv pip install -e ".[dev]"
+python -m pytest -q                         # 51 sim-free tests; should all pass
+python scripts/run_experiment.py --config configs/experiment/smoke.yaml   # toy backend, ~30 s
+```
+
+Then install Isaac Lab into the same environment following the **official** Isaac Lab 3.0
+installation page (pip/uv path), and check it with the adapter smoke test:
+
+```bash
+tmux new -s fdrl
+export CUDA_VISIBLE_DEVICES=1               # the free GPU on that machine
+python scripts/isaac_smoke.py --config configs/env/isaac.yaml sim.num_envs=16
+python scripts/calibrate.py --config configs/env/isaac.yaml --per-cell 50
+```
+
+`isaac_smoke.py` checks that the applied θ (cube pose, yaw, friction) reads back correctly and
+that the scripted expert can lift. Every line marked `VERIFY` in `src/fdrl/sim/isaaclab_lift.py`
+is an Isaac Lab API detail to confirm at this step.

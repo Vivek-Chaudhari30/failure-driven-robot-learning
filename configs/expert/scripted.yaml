@@ -1,0 +1,15 @@
+expert:
+  pregrasp_height: 0.08
+  gain: 0.5
+  align_xy_tol: 0.004
+  align_yaw_tol_deg: 3.0
+  descend_xy_tol: 0.006
+  descend_yaw_tol_deg: 5.0
+  close_z_tol: 0.004
+  lift_target_height: 0.12
+  lift_vmax: 0.3
+  lift_vmin: 0.06
+  accel_safety: 0.4
+  grip_accel_per_mu: 66.7   # calibrate for Isaac (M3)
+  mu_full_speed: 0.5
+  mu_aware: true

@@ -1,0 +1,4 @@
+# Laptop / CI: numpy stand-in simulator (not physics; for pipeline testing only).
+sim:
+  backend: toy
+  num_envs: 128

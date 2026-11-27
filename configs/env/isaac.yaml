@@ -1,0 +1,11 @@
+# GPU machines: Isaac Lab backend. Verify every value against the installed Isaac Lab version.
+sim:
+  backend: isaaclab
+  num_envs: 1024
+  isaac:
+    task: IsaacContrib-Lift-Cube-Franka-IK-Rel   # Isaac Lab 3.0; <=2.3.x: Isaac-Lift-Cube-Franka-IK-Rel-v0
+    device: cuda:0
+    headless: true
+    quat_order: xyzw                              # 3.0 = xyzw; <=2.3 = wxyz
+train:
+  device: cuda:0

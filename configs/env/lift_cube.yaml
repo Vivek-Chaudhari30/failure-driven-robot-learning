@@ -1,0 +1,24 @@
+# Task and condition space (EXPERIMENT_DESIGN sections 2-3). Values marked calibrate are placeholders.
+task:
+  horizon: 250            # calibrate: expert should finish in <= ~60% of T
+  policy_dt: 0.02         # 50 Hz (Isaac Lab lift default: sim dt 0.01, decimation 2; verify)
+  cube_half: 0.02         # calibrate against the Isaac cube asset
+  nominal_cube_xy: [0.5, 0.0]
+  success_height: 0.08    # calibrate
+  success_hold_steps: 25
+  pos_scale: 0.01
+  rot_scale: 0.05
+conditions:
+  x_range: [-0.10, 0.10]
+  y_range: [-0.25, 0.25]
+  yaw_range_deg: [-45.0, 45.0]
+  mu_range: [0.1, 1.0]
+  n_yaw_bins: 3
+  n_mu_bins: 3
+  holdout: [[0, 0, 1], [1, 2, 2], [2, 1, 0], [3, 2, 1]]
+  nom_pos_std: 0.03
+  nom_yaw_std_deg: 10.0
+  nom_mu_min: 0.6
+sim:
+  backend: toy
+  num_envs: 128

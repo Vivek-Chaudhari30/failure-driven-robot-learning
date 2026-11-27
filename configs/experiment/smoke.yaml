@@ -1,0 +1,20 @@
+# Minutes on a laptop with the toy backend. Checks that every stage runs; numbers mean nothing.
+experiment:
+  name: smoke
+  kind: equal_budget
+  regimes: [R2]
+  pipeline_seeds: [0]
+  strategies: [S0, S1, S2, S2+, S3, S3b, S4, S4b, S5, S5-shuffled, S6]
+  n0: 30
+  budgets: [20]
+  demo_equiv_steps: 85
+policy:
+  hidden: 128
+  ensemble_size: 2
+train:
+  steps: 600
+eval:
+  n_per_cell_val: 4
+  n_per_cell_test: 4
+sim:
+  num_envs: 64

@@ -60,7 +60,7 @@ M0 Design ─▶ M1 Env feasibility ─▶ M2 Env + conditions + logging ─▶ 
   4. **Benchmark:** episodes/min and peak VRAM for 1,024 envs × 250 steps, with random and
      zero actions.
   5. Write `pyproject.toml` with pins matching the chosen stack, and a SLURM job template.
-- **Deliverables:** ENVIRONMENT_SETUP §6 decision record; `scripts/slurm/*.sbatch`; benchmark JSON.
+- **Deliverables:** ENVIRONMENT_SETUP §6 decision record; tmux/`CUDA_VISIBLE_DEVICES` run procedure (no scheduler on the lab machines); benchmark JSON.
 - **Validation:** smoke test passes twice on different days (no flaky setup).
 - **Exit:** stock lift env runs headless at ≥ 1,024 parallel envs (or the fallback's equivalent),
   throughput is measured, and the ARCHITECTURE §8 estimates are updated with real numbers.

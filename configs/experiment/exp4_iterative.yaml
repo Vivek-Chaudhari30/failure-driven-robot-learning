@@ -1,0 +1,11 @@
+# Exp 4: iterative improvement, 4 rounds x B=50.
+experiment:
+  name: exp4_iterative
+  kind: iterative
+  regimes: [R2]
+  pipeline_seeds: [0, 1, 2, 3, 4]
+  strategies: [S1, S2, S3, S3b, S4, S4b, S5, S6]
+  n0: 100
+  budgets: [50]
+  rounds: 4
+  demo_equiv_steps: 100

@@ -54,7 +54,7 @@ failure-driven-robot-learning/
 ├── README.md  RESEARCH.md  EXPERIMENT_DESIGN.md  ARCHITECTURE.md  ROADMAP.md
 ├── docs/
 │   └── ENVIRONMENT_SETUP.md
-├── pyproject.toml              # created in M1, once versions are pinned against the cluster
+├── pyproject.toml              # lower-bound pins; tighten in M1 against the GPU machines
 ├── configs/
 │   ├── env/lift_cube.yaml      # Θ ranges, cell grid, horizon, success thresholds
 │   ├── expert/scripted.yaml
@@ -63,8 +63,11 @@ failure-driven-robot-learning/
 │   └── experiment/{exp1..exp7}.yaml
 ├── src/fdrl/
 │   ├── conditions.py           # Θ, cells, hold-out set H, seed streams, samplers q(θ)
+│   ├── config.py  cli.py  episodes.py   # typed config, CLI parsing, rollout -> records
 │   ├── sim/                    # ONLY place that imports isaaclab
 │   │   ├── base.py             #   SimBackend protocol (reset(θ, seed), step, privileged_state)
+│   │   ├── obs.py              #   simulator-agnostic observation + privileged-state keys
+│   │   ├── toy_lift.py         #   numpy stand-in backend (laptop/CI; not physics, not results)
 │   │   ├── isaaclab_lift.py    #   derived env cfg: randomization, contact sensors, success
 │   │   └── rollout.py          #   batched rollout + per-step recorder
 │   ├── expert/scripted.py      # state-feedback scripted grasp-lift controller
@@ -87,7 +90,7 @@ failure-driven-robot-learning/
 ├── scripts/
 │   ├── check_env.sh            # read-only cluster inspection (exists now)
 │   ├── gen_demos.py  train.py  eval.py  run_round.py  run_experiment.py
-│   └── slurm/                  # job templates (M1)
+│   └── (no slurm/: the lab machines have no scheduler; see ENVIRONMENT_SETUP §6)
 ├── tests/                      # sim-free unit tests run on any machine/CI
 └── runs/                       # gitignored: episodes, checkpoints, reports, plots
 ```

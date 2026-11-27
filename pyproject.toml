@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fdrl"
+version = "0.1.0"
+description = "Failure-driven data selection for robotic manipulation (research code)"
+readme = "README.md"
+requires-python = ">=3.11"
+# Isaac Lab / Isaac Sim are NOT listed here: they are installed separately on the GPU
+# machines (docs/ENVIRONMENT_SETUP.md). Only fdrl.sim.isaaclab_lift imports them.
+dependencies = [
+  "numpy>=1.26",
+  "torch>=2.2",
+  "h5py>=3.10",
+  "pyarrow>=15",
+  "pandas>=2.1",
+  "omegaconf>=2.3",
+  "scipy>=1.11",
+  "matplotlib>=3.8",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.5"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+ignore = ["E501", "E741"]
