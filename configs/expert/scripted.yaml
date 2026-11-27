@@ -5,6 +5,8 @@ expert:
   align_yaw_tol_deg: 3.0
   descend_xy_tol: 0.006
   descend_yaw_tol_deg: 5.0
+  descend_keep_xy_tol: 0.02       # hysteresis for real-arm drift while descending
+  descend_keep_yaw_tol_deg: 10.0
   close_z_tol: 0.004
   lift_target_height: 0.12
   lift_vmax: 0.3

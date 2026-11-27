@@ -61,8 +61,11 @@ class ScriptedExpert:
         move_xy = np.ones(n, dtype=bool)
         dz_override = np.full(n, np.nan)
 
-        descend_ok = (dxy < c.descend_xy_tol) & (np.abs(yaw_err) < math.radians(c.descend_yaw_tol_deg))
-        at_grasp = descend_ok & (np.abs(ee[:, 2] - cube[:, 2]) < c.close_z_tol)
+        tight = (dxy < c.descend_xy_tol) & (np.abs(yaw_err) < math.radians(c.descend_yaw_tol_deg))
+        below_pre = ee[:, 2] < cube[:, 2] + c.pregrasp_height - 0.01
+        keep = below_pre & (dxy < c.descend_keep_xy_tol) & (np.abs(yaw_err) < math.radians(c.descend_keep_yaw_tol_deg))
+        descend_ok = tight | keep
+        at_grasp = tight & (np.abs(ee[:, 2] - cube[:, 2]) < c.close_z_tol)
         closing = width < self.open_width - 0.002
         still_closing = closing & at_grasp & (width > 2 * half - 0.002)
 
@@ -73,6 +76,9 @@ class ScriptedExpert:
         # DESCEND
         d = descend_ok & ~closing
         target[d, 2] = cube[d, 2]
+        # Drifted beyond the tight tolerance: hold height and correct xy/yaw before going lower.
+        hold = d & ~tight
+        target[hold, 2] = ee[hold, 2]
         phase[d] = "descend"
         # CLOSE
         cl = (at_grasp & ~closing) | still_closing

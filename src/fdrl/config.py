@@ -96,6 +96,11 @@ class ExpertCfg:
     align_yaw_tol_deg: float = 3.0
     descend_xy_tol: float = 0.006
     descend_yaw_tol_deg: float = 5.0
+    # Hysteresis: once below the pre-grasp height, keep descending while within these looser
+    # bounds (a real arm drifts sideways while moving down). Beyond descend_xy_tol the expert
+    # pauses its descent and corrects xy instead of climbing back to the pre-grasp pose.
+    descend_keep_xy_tol: float = 0.02
+    descend_keep_yaw_tol_deg: float = 10.0
     close_z_tol: float = 0.004
     lift_target_height: float = 0.12  # above z0
     lift_vmax: float = 0.3  # m/s
