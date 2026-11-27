@@ -26,6 +26,7 @@ def fmt(v) -> str:
 def main() -> int:
     p = base_parser(__doc__)
     p.add_argument("--every", type=int, default=5)
+    p.add_argument("--env", type=int, default=0, help="which env to trace step by step")
     p.add_argument("--steps", type=int, default=0, help="default: task horizon")
     args = p.parse_args()
     cfg = config_from_args(args)
@@ -37,10 +38,12 @@ def main() -> int:
     priv = be.reset(conds, [seed_for("calib", 2, 0, i) for i in range(n)])
     ex = ScriptedExpert(cfg.expert, cfg.task, cfg.sim.toy.gripper_open_width)
     T = args.steps or cfg.task.horizon
+    k = args.env
     z0 = priv["cube_z0"].copy()
     max_f = np.zeros(n)
     max_h = np.zeros(n)
     phases_seen = [set() for _ in range(n)]
+    print(f"tracing env {k}: θ={conds[k]}")
     print(f"cube_z0={z0[0]:.4f}  start ee={np.round(priv['ee_pos'][0], 4)}  cube={np.round(priv['cube_pos'][0], 4)}")
     print(" t  phase     ee_xyz                 cube_xyz               dxy    dz     yawerr  width  fL     fR     act(dx,dy,dz,dyaw,grip)")
     for t in range(T):
@@ -52,13 +55,13 @@ def main() -> int:
         max_f = np.maximum(max_f, f.min(axis=1))
         max_h = np.maximum(max_h, cube[:, 2] - z0)
         if t % args.every == 0:
-            dxy = np.linalg.norm(cube[0, :2] - ee[0, :2])
-            dz = ee[0, 2] - cube[0, 2]
-            ye = math.degrees(wrap_sym90(yaw_from_quat_xyzw(priv["cube_quat"][0]) - yaw_from_quat_xyzw(priv["ee_quat"][0])))
-            a = act[0]
-            print(f"{t:3d} {phase[0]:9s} {fmt(ee[0]):22s} "
-                  f"{fmt(cube[0]):22s} {dxy:.4f} {dz:+.4f} {ye:+6.1f}  "
-                  f"{priv['gripper_width'][0]:.4f} {f[0, 0]:6.2f} {f[0, 1]:6.2f} "
+            dxy = np.linalg.norm(cube[k, :2] - ee[k, :2])
+            dz = ee[k, 2] - cube[k, 2]
+            ye = math.degrees(wrap_sym90(yaw_from_quat_xyzw(priv["cube_quat"][k]) - yaw_from_quat_xyzw(priv["ee_quat"][k])))
+            a = act[k]
+            print(f"{t:3d} {phase[k]:9s} {fmt(ee[k]):22s} "
+                  f"{fmt(cube[k]):22s} {dxy:.4f} {dz:+.4f} {ye:+6.1f}  "
+                  f"{priv['gripper_width'][k]:.4f} {f[k, 0]:6.2f} {f[k, 1]:6.2f} "
                   f"({a[0]:+.2f},{a[1]:+.2f},{a[2]:+.2f},{a[5]:+.2f},{a[6]:+.0f})")
         priv = be.step(act)
     print("\nper-env summary:")
