@@ -21,6 +21,38 @@ from fdrl.config import IsaacCfg, TaskCfg
 from fdrl.sim.obs import quat_xyzw_from_yaw
 
 
+def _to_numpy(x) -> np.ndarray:
+    """torch tensor, Warp array or array-like -> float64 numpy array."""
+    if hasattr(x, "detach"):  # torch
+        return x.detach().cpu().numpy().astype(np.float64)
+    if hasattr(x, "numpy"):  # warp.array (copies device memory to host)
+        return np.asarray(x.numpy(), dtype=np.float64)
+    return np.asarray(x, dtype=np.float64)
+
+
+def _to_torch(x, torch):
+    if isinstance(x, torch.Tensor):
+        return x
+    try:
+        import warp as wp
+
+        if isinstance(x, wp.array):
+            return wp.to_torch(x)
+    except ImportError:
+        pass
+    return torch.as_tensor(np.asarray(x))
+
+
+def _set_materials(view, mats, idx) -> None:
+    """The PhysX view may want torch tensors or Warp arrays depending on the version."""
+    try:
+        view.set_material_properties(mats, idx)
+    except (TypeError, RuntimeError, AttributeError, ValueError):
+        import warp as wp
+
+        view.set_material_properties(wp.from_torch(mats.contiguous()), wp.from_torch(idx))
+
+
 def _wxyz_to_xyzw(q: np.ndarray) -> np.ndarray:
     return np.concatenate([q[..., 1:], q[..., :1]], axis=-1)
 
@@ -67,10 +99,7 @@ class IsaacLabLiftBackend:
             prim_path="{ENV_REGEX_NS}/Robot/panda_rightfinger",
             filter_prim_paths_expr=["{ENV_REGEX_NS}/Object"],
         )
-        env_cfg.scene.contact_table = ContactSensorCfg(
-            prim_path="{ENV_REGEX_NS}/Object",
-            filter_prim_paths_expr=["{ENV_REGEX_NS}/Table"],  # VERIFY: table prim path
-        )
+        # (No cube-table sensor: PhysX GPU contact filters don't support the static table collider.)
         # Action scaling: our normalized action * {pos,rot}_scale = metres/radians per step.
         self._ik_scale = float(getattr(env_cfg.actions.arm_action, "scale", 1.0))  # VERIFY
 
@@ -112,7 +141,7 @@ class IsaacLabLiftBackend:
         scene = self.u.scene
         obj = scene["object"]
         env_ids = torch.arange(n, device=self.device)
-        origins = scene.env_origins
+        origins = _to_torch(scene.env_origins, torch).to(self.device)
         nx, ny = self.task.nominal_cube_xy
         xy = torch.tensor([[nx + c.x, ny + c.y] for c in conditions], device=self.device, dtype=torch.float32)
         z = torch.full((n, 1), self.task.cube_half, device=self.device)
@@ -127,13 +156,19 @@ class IsaacLabLiftBackend:
         # Friction: set static = dynamic = mu on the cube AND the fingers so that PhysX's
         # material combine mode (average by default) yields exactly mu at the finger-cube contact.
         self._mu = np.array([c.mu for c in conditions], dtype=np.float64)
-        mu_t = torch.tensor(self._mu, dtype=torch.float32)
         for entity in (obj, scene["robot"]):
             view = entity.root_physx_view  # VERIFY: PhysX tensor view in the pinned version
-            mats = view.get_material_properties()  # [N, num_shapes, 3] (static, dynamic, restitution), CPU
+            # [N, num_shapes, 3] = (static, dynamic, restitution). Isaac Lab 3.0 returns a Warp
+            # array (not a torch tensor), so convert, edit a copy, and hand back what the view takes.
+            mats = _to_torch(view.get_material_properties(), torch).clone()
+            mu_t = torch.tensor(self._mu, dtype=mats.dtype, device=mats.device)
             mats[:, :, 0] = mu_t[:, None]
             mats[:, :, 1] = mu_t[:, None]
-            view.set_material_properties(mats, torch.arange(n))
+            idx = torch.arange(n, dtype=torch.int32, device=mats.device)
+            _set_materials(view, mats, idx)
+        # Read friction back from the cube to confirm it was applied (logged by isaac_smoke.py).
+        back = _to_torch(obj.root_physx_view.get_material_properties(), torch)
+        self.mu_readback = back[:, 0, 0].detach().cpu().numpy().astype(np.float64)
         # One zero-motion step so the new state is reflected in the buffers.
         self._last_ee = None
         priv = self.step(np.concatenate([np.zeros((n, 6)), np.ones((n, 1))], axis=1).astype(np.float32))
@@ -155,28 +190,32 @@ class IsaacLabLiftBackend:
     def _priv(self) -> dict[str, np.ndarray]:
         scene = self.u.scene
         robot, obj = scene["robot"], scene["object"]
-        origins = scene.env_origins
-
-        def np_(t):
-            return t.detach().cpu().numpy().astype(np.float64)
+        # Every buffer may be a torch tensor or (Isaac Lab 3.0) a Warp array: convert to numpy
+        # FIRST, then do arithmetic.
+        origins = _to_numpy(scene.env_origins)
 
         ee_frame = scene["ee_frame"]  # VERIFY: FrameTransformer name in the lift cfg
-        ee_pos = np_(ee_frame.data.target_pos_w[:, 0, :] - origins)
-        ee_quat = np_(ee_frame.data.target_quat_w[:, 0, :])
-        cube_pos = np_(obj.data.root_pos_w - origins)
-        cube_quat = np_(obj.data.root_quat_w)
+        ee_pos = _to_numpy(ee_frame.data.target_pos_w)[:, 0, :] - origins
+        ee_quat = _to_numpy(ee_frame.data.target_quat_w)[:, 0, :]
+        cube_pos = _to_numpy(obj.data.root_pos_w) - origins
+        cube_quat = _to_numpy(obj.data.root_quat_w)
         if self._wxyz:
             ee_quat, cube_quat = _wxyz_to_xyzw(ee_quat), _wxyz_to_xyzw(cube_quat)
-        jp, jv = np_(robot.data.joint_pos), np_(robot.data.joint_vel)
-        lim = np_(robot.data.soft_joint_pos_limits)  # [N, J, 2]  # VERIFY
+        jp, jv = _to_numpy(robot.data.joint_pos), _to_numpy(robot.data.joint_vel)
+        lim = _to_numpy(robot.data.soft_joint_pos_limits)  # [N, J, 2]  # VERIFY
         at_lim = ((jp <= lim[..., 0] + 1e-3) | (jp >= lim[..., 1] - 1e-3))[:, :7].any(axis=1)
 
         def force(name):
-            s = scene[name]
-            fm = s.data.force_matrix_w  # [N, bodies, filters, 3]  # VERIFY
-            return np.linalg.norm(np_(fm), axis=-1).reshape(fm.shape[0], -1).max(axis=1)
+            fm = scene[name].data.force_matrix_w  # [N, bodies, filters, 3]  # VERIFY
+            if fm is None:  # filter unsupported -> no finger-cube force available
+                return np.zeros(self.num_envs)
+            f = np.linalg.norm(_to_numpy(fm), axis=-1)
+            return f.reshape(f.shape[0], -1).max(axis=1)
 
-        fl, fr, ft = force("contact_left"), force("contact_right"), force("contact_table")
+        fl, fr = force("contact_left"), force("contact_right")
+        # Cube-table contact: PhysX GPU contact filters don't support the static table collider,
+        # so use a geometric indicator instead (1.0 when the cube rests on the table).
+        ft = (cube_pos[:, 2] <= self._z0 + 0.002).astype(np.float64)
         finite = np.isfinite(cube_pos).all(axis=1) & np.isfinite(jp).all(axis=1)
         return {
             "joint_pos": jp[:, :9],
@@ -186,7 +225,7 @@ class IsaacLabLiftBackend:
             "gripper_width": jp[:, 7] + jp[:, 8],
             "cube_pos": cube_pos,
             "cube_quat": cube_quat,
-            "cube_lin_vel": np_(obj.data.root_lin_vel_w),
+            "cube_lin_vel": _to_numpy(obj.data.root_lin_vel_w),
             "contact_lr": np.stack([fl, fr], axis=1),
             "contact_table": ft,
             "at_joint_limit": at_lim.astype(np.float64),

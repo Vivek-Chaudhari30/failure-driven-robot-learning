@@ -30,12 +30,16 @@ def main() -> int:
                        float(np.exp(rng.uniform(np.log(0.1), 0.0)))) for _ in range(n)]
     priv = be.reset(conds, [seed_for("calib", 0, 0, i) for i in range(n)])
     nx, ny = cfg.task.nominal_cube_xy
+    mu_back = getattr(be, "mu_readback", None)
     ok = True
     for i, c in enumerate(conds):
         dx = priv["cube_pos"][i, 0] - (nx + c.x)
         dy = priv["cube_pos"][i, 1] - (ny + c.y)
         dyaw = wrap_sym90(yaw_from_quat_xyzw(priv["cube_quat"][i]) - c.yaw)
-        good = abs(dx) < 0.005 and abs(dy) < 0.005 and abs(dyaw) < math.radians(2)
+        mu_ok = mu_back is None or abs(mu_back[i] - c.mu) < 1e-3
+        if mu_back is not None:
+            print(f"env {i}: friction applied={c.mu:.3f} read-back={mu_back[i]:.3f} {'OK' if mu_ok else 'MISMATCH'}")
+        good = abs(dx) < 0.005 and abs(dy) < 0.005 and abs(dyaw) < math.radians(2) and mu_ok
         ok &= good
         print(f"env {i}: applied θ={c} | read-back dxy=({dx:+.4f},{dy:+.4f}) dyaw={math.degrees(dyaw):+.2f}° "
               f"mu={priv['mu'][i]:.3f} z0={priv['cube_z0'][i]:.4f} {'OK' if good else 'MISMATCH'}")
