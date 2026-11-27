@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# Experiment artifacts: never commit (see ARCHITECTURE.md §7)
+runs/
+outputs/
+logs/
+wandb/
+*.hdf5
+*.h5
+*.zarr/
+*.parquet
+*.pt
+*.pth
+*.ckpt
+*.mp4
+*.gif
+*.npz
+
+# Environment reports may contain hostnames/paths; review before sharing
+env_report_*.txt
+
+# Secrets
+.env
+.env.*
+*.key
+*.pem
+credentials*.json
+.claude/settings.local.json
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/
