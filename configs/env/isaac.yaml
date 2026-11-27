@@ -26,3 +26,11 @@ expert:
   grip_accel_per_mu: 36.0
   mu_slow: 0.27
   mu_full_speed: 0.6
+# Result of the above (calib3, 10 episodes per cell + 32 per friction value):
+#   expert success by friction bin: [0.20, 0.34) 0.34 | [0.34, 0.59) 0.93 | [0.59, 1.0] 0.93
+#   sweep: 0.00 at mu <= 0.25 (intended infeasible band); 0.94 / 0.97 / 1.00 / 0.88 / 0.75 at
+#   mu 0.30 / 0.40 / 0.55 / 0.75 / 1.00. Feasible bins are just under the 95% target; the drop at
+#   high mu is mostly F6 (cube disturbed before the grasp) and F1 (approach). Open issue.
+#   accepted length on training cells: mean 216.1, p90 303, max 398 (T = 400).
+experiment:
+  demo_equiv_steps: 216   # mean accepted-demo length under uniform sampling (calib3)

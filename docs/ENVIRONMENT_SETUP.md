@@ -145,6 +145,21 @@ supported by NVIDIA. If both fail: ManiSkill3 (Path 3).
 Still to record here after M1: exact versions installed, measured throughput (episodes/min for
 1,024 envs × 250 steps), peak VRAM, and the `scripts/isaac_smoke.py` result.
 
+### 6.4 Isaac Lab 3.0 status (tottori, 2026-11-27)
+
+Working machine: **tottori** (Ubuntu 24.04, driver 595.99, RTX A6000). Isaac Lab 3.0 installed with
+`uv` into `/tmp/$USER/fdrl-venv`; do not set `CUDA_VISIBLE_DEVICES` (Isaac warns against it).
+Machines on Ubuntu 20.04 (hokkaido, bippu, osaka: glibc 2.31, driver 550-555) cannot install
+Isaac Lab 3.0. The 580-driver 24.04 machines are untested.
+
+- `isaac_smoke.py`: cube pose, yaw and friction read back correctly; finger contacts ~5 N.
+- Adapter fixes found on the real sim: Warp arrays from PhysX views, relative IK realises only
+  ~10% of each Δ (actions now integrated into a target pose), descend hysteresis in the expert.
+- Calibration (calibration seeds only, 10 episodes per cell): see the comments in
+  `configs/env/isaac.yaml`. Expert success 0.34 / 0.93 / 0.93 by friction bin, infeasible at
+  μ ≤ 0.25, mean accepted demo 216 steps (T = 400). The feasible bins are just below the 95%
+  target, with a drop at μ = 1.0 (0.75, mostly F6 / F1). Not yet fixed.
+
 ### 6.3 Running on the lab GPUs (procedure)
 
 ```bash

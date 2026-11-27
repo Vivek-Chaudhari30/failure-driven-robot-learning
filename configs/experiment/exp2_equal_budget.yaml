@@ -8,4 +8,3 @@ experiment:
   strategies: [S0, S1, S2, S2+, S3, S3b, S4, S4b, S5, S5-shuffled, S6]
   n0: 100
   budgets: [50, 100, 200]
-  demo_equiv_steps: 100   # calibrate: mean accepted-demo length under uniform sampling
