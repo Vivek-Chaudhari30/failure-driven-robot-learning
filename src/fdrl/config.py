@@ -111,6 +111,7 @@ class ExpertCfg:
     grip_accel_per_mu: float = 66.7
     gravity: float = 9.81
     mu_full_speed: float = 0.5  # at or above this mu the expert lifts at lift_vmax
+    mu_slow: float = 0.15  # at or below this mu the expert lifts at lift_vmin
     mu_aware: bool = True  # the expert uses privileged mu; the policy never sees it
 
 

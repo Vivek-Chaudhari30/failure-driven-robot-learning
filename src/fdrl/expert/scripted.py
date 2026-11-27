@@ -37,7 +37,7 @@ class ScriptedExpert:
         mu_eff = np.asarray(mu) if c.mu_aware else np.ones_like(mu)
         a_cap = c.grip_accel_per_mu * mu_eff - c.gravity
         a_max = np.maximum(c.accel_safety * a_cap, 0.05)
-        frac = np.clip((mu_eff - 0.15) / max(c.mu_full_speed - 0.15, 1e-6), 0.0, 1.0)
+        frac = np.clip((mu_eff - c.mu_slow) / max(c.mu_full_speed - c.mu_slow, 1e-6), 0.0, 1.0)
         v = c.lift_vmin + (c.lift_vmax - c.lift_vmin) * frac
         return v, a_max
 

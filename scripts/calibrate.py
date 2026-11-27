@@ -7,6 +7,7 @@ failure types per cell, on CALIBRATION seeds only. Optionally a friction sweep a
 Prints one line per cell, a summary per friction bin, overall failure counts, and the mean
 accepted-demo length under uniform sampling (use it for experiment.demo_equiv_steps).
 """
+import dataclasses
 import json
 import math
 import sys
@@ -25,6 +26,12 @@ from fdrl.sim.rollout import rollout
 
 def _labels(res, cfg) -> list[str | None]:
     return [label_episode(r.privileged, r.actions, r.success, cfg.task, cfg.failures).label for r in res]
+
+
+def _causes(res, cfg) -> list[str | None]:
+    """Primary label with F7 (unstable motion) switched off: the outcome underneath the jerk flag."""
+    fc = dataclasses.replace(cfg.failures, unstable_steps=10**9)
+    return [label_episode(r.privileged, r.actions, r.success, cfg.task, fc).label for r in res]
 
 
 def _fmt_counts(c: Counter) -> str:
@@ -52,6 +59,7 @@ def main() -> int:
             items.append((grid.sample_in_cell(cell, np.random.default_rng(s)), s))
     res = rollout(be, items, ctrl, cfg.task, record_obs=False)
     labels = _labels(res, cfg)
+    causes = _causes(res, cfg)
 
     table, by_mu = {}, {}
     for cell in range(grid.n_cells):
@@ -59,19 +67,22 @@ def main() -> int:
         succ = [res[k].success for k in idx]
         lens = [res[k].length for k in idx if res[k].success]
         fails = Counter(labels[k] for k in idx if not res[k].success)
+        cause = Counter(causes[k] for k in idx if not res[k].success)
         q, yb, mb = grid.bins(cell)
         table[cell] = {"bins": (q, yb, mb), "holdout": cell in grid.holdout, "expert_success": float(np.mean(succ)),
-                       "mean_len": float(np.mean(lens)) if lens else None, "failures": dict(fails)}
+                       "mean_len": float(np.mean(lens)) if lens else None, "failures": dict(fails),
+                       "causes": dict(cause)}
         by_mu.setdefault(mb, []).extend(succ)
         ml = f"{np.mean(lens):5.0f}" if lens else "  -  "
         print(f"cell {cell:2d} bins={(q, yb, mb)} H={'Y' if cell in grid.holdout else 'n'} "
-              f"success={np.mean(succ):.2f} len={ml} fails: {_fmt_counts(fails)}")
+              f"success={np.mean(succ):.2f} len={ml} fails: {_fmt_counts(fails)} | cause: {_fmt_counts(cause)}")
 
     edges = np.exp(grid.logmu_edges)
     for mb in sorted(by_mu):
         print(f"mu bin {mb} [{edges[mb]:.3f}, {edges[mb + 1]:.3f}): expert success {np.mean(by_mu[mb]):.2f}")
     all_fails = Counter(l for r, l in zip(res, labels, strict=True) if not r.success)
     print(f"failure totals: {_fmt_counts(all_fails)}")
+    print(f"cause totals (F7 ignored): {_fmt_counts(Counter(c for r, c in zip(res, causes, strict=True) if not r.success))}")
     train_lens = [r.length for r in res if r.success and grid.cell_of(r.condition) not in grid.holdout]
     summary = {"demo_equiv_steps": float(np.mean(train_lens)) if train_lens else None,
                "max_len": int(np.max(train_lens)) if train_lens else None,
@@ -95,12 +106,12 @@ def main() -> int:
                 its.append((Condition(float(x), float(y), float(yaw), mu), seed_for("calib", 5, 0, j)))
                 j += 1
             rr = rollout(be, its, ctrl, cfg.task, record_obs=False)
-            ll = _labels(rr, cfg)
+            ll = _causes(rr, cfg)
             fails = Counter(l for r, l in zip(rr, ll, strict=True) if not r.success)
             ok_len = [r.length for r in rr if r.success]
             sweep[mu] = {"success": float(np.mean([r.success for r in rr])), "failures": dict(fails)}
             print(f"mu={mu:.2f}: success {np.mean([r.success for r in rr]):.2f}  "
-                  f"len {np.mean(ok_len) if ok_len else float('nan'):.0f}  fails: {_fmt_counts(fails)}")
+                  f"len {np.mean(ok_len) if ok_len else float('nan'):.0f}  cause (F7 ignored): {_fmt_counts(fails)}")
         summary["mu_sweep"] = sweep
 
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)

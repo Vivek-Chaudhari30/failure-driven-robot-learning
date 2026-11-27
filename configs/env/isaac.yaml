@@ -9,3 +9,20 @@ sim:
     quat_order: xyzw                              # 3.0 = xyzw; <=2.3 = wxyz
 train:
   device: cuda:0
+
+# --- Calibration on Isaac Lab 3.0 (tottori, 2026-11-27, calibration seeds only) ---------------
+# Friction sweep: expert success 0.00 at mu <= 0.25, 0.81-0.91 at mu 0.30-0.75 -> lifting becomes
+# infeasible near mu ~ 0.27. Range moved to [0.20, 1.0] so only the lower part of the lowest bin
+# [0.20, 0.34) is infeasible (EXPERIMENT_DESIGN section 3, calibration step 1).
+conditions:
+  mu_range: [0.2, 1.0]
+# Accepted demos averaged 179 steps (p90 223) with T = 250. T = 400 lets the expert finish in
+# <= ~60% of T as the design requires.
+task:
+  horizon: 400
+# Friction-limited lift model fitted to the measured threshold: a_cap(mu) = 36 * mu - 9.81 = 0
+# at mu ~ 0.27. Lift slowly near the threshold, at full speed from mu = 0.6.
+expert:
+  grip_accel_per_mu: 36.0
+  mu_slow: 0.27
+  mu_full_speed: 0.6
