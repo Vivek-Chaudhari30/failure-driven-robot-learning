@@ -13,8 +13,6 @@ from pathlib import Path
 
 from fdrl.cli import base_parser, config_from_args
 from fdrl.conditions import CellGrid
-from fdrl.evaluate import evaluate
-from fdrl.policy.bc import MLPPolicy
 from fdrl.sim.base import make_backend
 
 
@@ -39,7 +37,10 @@ def main() -> int:
     cfg = config_from_args(args)
     root = Path(cfg.experiment.run_root) / cfg.experiment.name
     grid = CellGrid(cfg.conditions)
-    be = make_backend(cfg)
+    be = make_backend(cfg)  # Isaac must start before torch / pyarrow / h5py are imported
+    from fdrl.evaluate import evaluate
+    from fdrl.policy.bc import MLPPolicy
+
     pols = [Path(args.policy)] if args.policy else final_policies(root)
     for pp in pols:
         ps = args.pipeline_seed if args.policy else int(pp.parent.parent.name[4:] if pp.parent.name.startswith("round") else pp.parent.name[4:])

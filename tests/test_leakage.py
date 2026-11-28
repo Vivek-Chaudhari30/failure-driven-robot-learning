@@ -66,3 +66,14 @@ def test_only_sim_imports_isaaclab():
         if f.parent.name == "sim":
             continue
         assert not pat.search(f.read_text()), f"{f} imports Isaac Lab outside fdrl.sim"
+
+
+def test_backend_startup_imports_stay_light():
+    """Isaac Sim must start before torch/pyarrow/h5py load (else it crashes at startup)."""
+    import subprocess
+    import sys
+
+    code = ("import sys; from fdrl.cli import base_parser, config_from_args; from fdrl.sim.base import make_backend; "
+            "print(','.join(m for m in ('torch', 'pyarrow', 'h5py', 'pandas') if m in sys.modules))")
+    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True).stdout.strip()
+    assert out == "", f"heavy modules imported before the simulator starts: {out}"

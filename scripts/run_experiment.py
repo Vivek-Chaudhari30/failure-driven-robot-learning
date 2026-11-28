@@ -14,14 +14,19 @@ import sys
 import time
 
 from fdrl.cli import base_parser, config_from_args
-from fdrl.loop import Pipeline
+from fdrl.sim.base import make_backend
 
 
 def main() -> int:
     args = base_parser(__doc__).parse_args()
     cfg = config_from_args(args)
     t0 = time.time()
-    pipe = Pipeline(cfg)
+    # Start the simulator BEFORE importing torch / pyarrow / h5py (via fdrl.loop): loading those
+    # first makes Isaac Sim crash (exit 139) or hang at startup, apparently a shared-library clash.
+    backend = make_backend(cfg)
+    from fdrl.loop import Pipeline
+
+    pipe = Pipeline(cfg, backend=backend)
     print(f"[fdrl] experiment={cfg.experiment.name} kind={cfg.experiment.kind} backend={cfg.sim.backend} "
           f"root={pipe.root}", flush=True)
     try:
