@@ -18,6 +18,7 @@ import math
 import platform
 import subprocess
 import sys
+import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
@@ -117,6 +118,15 @@ def run_metadata(cfg: Config, backend: SimBackend | None) -> dict:
     return meta
 
 
+_T0 = time.time()
+
+
+def log(msg: str) -> None:
+    """Progress line, flushed immediately (runs are often piped to tee inside tmux)."""
+    el = time.time() - _T0
+    print(f"[fdrl {time.strftime('%H:%M:%S')} +{el / 60:6.1f}m] {msg}", flush=True)
+
+
 class Collector:
     """Executes an AcquisitionPlan (or a fixed-count collection) and writes episodes to the store."""
 
@@ -168,6 +178,7 @@ class Collector:
                 return len(accepted_ids) + pending >= target_accepted
             return led.acquisition_cost >= budget
 
+        log(f"collect {tag}: mode={plan.mode} target={target_accepted if target_accepted is not None else plan.budget}")
         while not done():
             if cursor + n_env > max_attempts:
                 raise RuntimeError(f"acquisition exhausted seed block {block} (budget too large?)")
@@ -229,6 +240,7 @@ class Collector:
                 led.accepted_demos += len(recs)
             else:
                 raise ValueError(plan.mode)
+            log(f"  collect {tag}: attempts={cursor} accepted={len(accepted_ids)} cost={led.acquisition_cost}")
         return accepted_ids, led, per_cell
 
     def _expert_batch(self, items, led, accepted_ids, per_cell, done, common):
@@ -311,16 +323,21 @@ class Pipeline:
 
     def train(self, manifest: DatasetManifest, ps: int, round_idx: int, include_latent: bool = False):
         arr = load_training_arrays(self.store, manifest, self.grid, include_latent=include_latent)
+        log(f"train {manifest.name}: {len(manifest)} demos, {len(arr.obs)} samples")
         res = train_bc(arr.obs, arr.actions, self.cfg.train, self.cfg.policy, seed=derive_seed(ps, round_idx, 7),
                        include_latent=include_latent, mu_range=tuple(self.cfg.conditions.mu_range))
+        log(f"  train done in {res.seconds:.0f}s")
         return res, arr
 
     def val_eval(self, policy: MLPPolicy, ps: int, out_dir: Path, artifacts: bool, tag: str,
                  strategy: str | None, round_idx: int) -> tuple[EvalReport, EvalArtifacts | None]:
-        return evaluate(policy.controller(), self.backend, self.grid, self.cfg, split="val", pipeline_seed=ps,
+        log(f"val eval {tag} round {round_idx} (artifacts={artifacts})")
+        out = evaluate(policy.controller(), self.backend, self.grid, self.cfg, split="val", pipeline_seed=ps,
                         policy_id=policy.policy_id(), store=self.store, out_dir=out_dir,
                         expert=self.expert.act if artifacts else None, collect_artifacts=artifacts,
                         tag=tag, strategy=strategy, round_idx=round_idx)
+        log(f"  val success {out[0].overall():.3f}")
+        return out
 
     def collect_fixed(self, regime: str, ps: int, n: int, name: str) -> DatasetManifest:
         plan = AcquisitionPlan(name, "sampler", math.inf, distribution=self._dist(regime))
@@ -347,6 +364,7 @@ class Pipeline:
             # Diagnosis requested later: re-collect artifacts with the SAME cached policy (no retrain).
             policy = MLPPolicy.load(pol_p)
             arr = load_training_arrays(self.store, manifest, self.grid)
+            log("val eval round0 again, collecting diagnosis artifacts (cached policy)")
             _, art = evaluate(policy.controller(), self.backend, self.grid, self.cfg, split="val",
                               pipeline_seed=ps, policy_id=policy.policy_id(), expert=self.expert.act,
                               collect_artifacts=True)
@@ -366,6 +384,7 @@ class Pipeline:
     # ------------------------------------------------------------------ diagnosis
     def compute_diagnosis(self, report, art, policy, arr, manifest, ps: int, round_idx: int) -> Diagnosis:
         cfg = self.cfg
+        log(f"diagnosis round {round_idx}")
         cells = self.grid.train_cells
         idx = self.store.index()
         sig = DiagnosisSignals(
@@ -390,12 +409,14 @@ class Pipeline:
             sig.probe_gain = {c: rep_p.success(c) - report.success(c) for c in cells if c in rep_p.per_cell}
         diag = diagnose(report, sig, cells, cfg.diagnosis, cfg.strategy.fixability_priors)
         diag.cost = cost
+        log("  diagnosis done")
         return diag
 
     # ------------------------------------------------------------------ strategies
     def run_strategy(self, regime: str, ps: int, strategy: str, budget_demo_eq: float, rounds: int,
                      out_root: Path | None = None) -> list[RoundResult]:
         cfg = self.cfg
+        log(f"=== {strategy} {regime} seed{ps} B={budget_demo_eq:g} ===")
         needs_diag = strategy in NEEDS_DIAGNOSIS
         pol_p, report, diag = self.round0(regime, ps, need_diagnosis=needs_diag)
         manifest = self.d0(regime, ps)
